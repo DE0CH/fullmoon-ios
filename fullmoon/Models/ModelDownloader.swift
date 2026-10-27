@@ -80,9 +80,10 @@ final class ModelDownloader: NSObject {
     @ObservationIgnored private var speedSample: (time: Date, bytes: Int64)?
     @ObservationIgnored private var speedTask: Task<Void, Never>?
 
-    private lazy var chunks: [Chunk] = spec.files.flatMap { file in
-        stride(from: Int64(0), to: file.size, by: spec.chunkSize).map {
-            Chunk(file: file.name, offset: $0, length: min(spec.chunkSize, file.size - $0))
+    @ObservationIgnored private let chunks: [Chunk] = ModelSpec.current.files.flatMap { file in
+        let size = ModelSpec.current.chunkSize
+        return stride(from: Int64(0), to: file.size, by: Int(size)).map {
+            Chunk(file: file.name, offset: $0, length: min(size, file.size - $0))
         }
     }
 
