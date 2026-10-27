@@ -9,9 +9,20 @@ import SwiftUI
 
 struct OnboardingView: View {
     @Binding var showOnboarding: Bool
+    @Environment(ModelDownloader.self) var downloader
     
     var body: some View {
         NavigationStack {
+            if downloader.phase == .notStarted {
+                welcome
+            } else {
+                // a download already under way (or paused) goes straight to its progress
+                OnboardingDownloadingModelProgressView(showOnboarding: $showOnboarding)
+            }
+        }
+    }
+
+    var welcome: some View {
             VStack {
                 Spacer()
                 
@@ -25,7 +36,7 @@ struct OnboardingView: View {
                         Text("fullmoon")
                             .font(.title)
                             .fontWeight(.semibold)
-                        Text("chat with private and local large language models")
+                        Text("private chat with Gemma, running entirely on your iPhone")
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
                     }
@@ -38,7 +49,7 @@ struct OnboardingView: View {
                         VStack(alignment: .leading) {
                             Text("fast")
                                 .font(.headline)
-                            Text("optimized for apple silicon")
+                            Text("Gemma 4 E4B, built by Google for phones, on Apple's MLX")
                                 .font(.callout)
                                 .foregroundStyle(.secondary)
                         }
@@ -55,7 +66,7 @@ struct OnboardingView: View {
                         VStack(alignment: .leading) {
                             Text("private")
                                 .font(.headline)
-                            Text("runs locally on your device")
+                            Text("nothing leaves your device, and it works offline")
                                 .font(.callout)
                                 .foregroundStyle(.secondary)
                         }
@@ -90,7 +101,7 @@ struct OnboardingView: View {
                 
                 Spacer()
                 
-                NavigationLink(destination: OnboardingInstallModelView(showOnboarding: $showOnboarding)) {
+                NavigationLink(destination: OnboardingDownloadingModelProgressView(showOnboarding: $showOnboarding)) {
                     Text("get started")
                         #if os(iOS) || os(visionOS)
                         .font(.headline)
@@ -104,11 +115,11 @@ struct OnboardingView: View {
                 .buttonStyle(.borderedProminent)
                 .buttonBorderShape(.capsule)
                 .padding(.horizontal)
+                .accessibilityIdentifier("getStarted")
             }
             .padding()
             .navigationTitle("welcome")
             .toolbar(.hidden)
-        }
         #if os(macOS)
         .frame(width: 420, height: 520)
         #endif
@@ -117,4 +128,5 @@ struct OnboardingView: View {
 
 #Preview {
     OnboardingView(showOnboarding: .constant(true))
+        .environment(ModelDownloader.shared)
 }

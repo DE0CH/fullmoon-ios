@@ -1,0 +1,56 @@
+# Runs the app's model (Gemma 4 E4B, mlx-community 4-bit, at the revision pinned in ModelSpec.swift) on a macOS
+# runner with the app's own tokenizer bridge and MLX calls (the ModelCheck tool in project.yml): two chat turns that
+# must answer "Paris" and remember the name, plus speed and peak memory. The runner is a VM, so the speed is not the
+# phone's. The simulator UI test uses a stand-in for the model, so this is where CI hears Gemma.
+name: model-check
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["fullmoon/Models/**", "model-check/**", "project.yml", ".github/workflows/model-check.yml"]
+permissions: { contents: read }
+defaults:
+  run:
+    shell: bash -eo pipefail {0}
+jobs:
+  check:
+    runs-on: macos-26
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pinned model revision and files
+        id: model
+        run: |
+          SPEC=fullmoon/Models/ModelSpec.swift
+          echo "repo=$(sed -n 's/.*repo: "\(.*\)",/\1/p' $SPEC | head -1)" >> "$GITHUB_OUTPUT"
+          echo "rev=$(sed -n 's/.*revision: "\(.*\)",/\1/p' $SPEC | head -1)" >> "$GITHUB_OUTPUT"
+          echo "files=$(sed -n 's/.*ModelFile(name: "\([^"]*\)".*/\1/p' $SPEC | tr '\n' ' ')" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: model
+          key: model-${{ steps.model.outputs.rev }}
+      - name: Download the model (what the app downloads)
+        run: |
+          mkdir -p model
+          for f in ${{ steps.model.outputs.files }}; do
+            [ -s "model/$f" ] || curl -sSfL --retry 5 -o "model/$f" "https://huggingface.co/${{ steps.model.outputs.repo }}/resolve/${{ steps.model.outputs.rev }}/$f"
+          done
+          ls -la model
+          shasum -a 256 model/model.safetensors model/tokenizer.json
+          sysctl -n machdep.cpu.brand_string hw.memsize
+      - name: Build ModelCheck
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_*.app | grep -v -i beta | sort -V | tail -1)
+          sudo xcode-select -s "$XCODE"; xcodebuild -version
+          brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
+          xcodebuild -downloadComponent MetalToolchain > /dev/null 2>&1 || true
+          xcodegen generate --quiet
+          xcodebuild build -project fullmoon.xcodeproj -scheme ModelCheck -configuration Release -destination 'platform=macOS' \
+            -derivedDataPath "$RUNNER_TEMP/dd" -skipPackagePluginValidation -skipMacroValidation > "$RUNNER_TEMP/build.log" 2>&1 || true
+          grep -E "error:|\*\* BUILD" "$RUNNER_TEMP/build.log" | head -40 || true
+          grep -q "BUILD SUCCEEDED" "$RUNNER_TEMP/build.log"
+      - name: Two chat turns with the real model
+        run: |
+          BIN=$(find "$RUNNER_TEMP/dd/Build/Products/Release" -maxdepth 1 -name ModelCheck -type f | head -1)
+          /usr/bin/time -l "$BIN" "$PWD/model" 2>&1 | tee out.txt | grep -v "^\s*[0-9]* *\(page\|signals\|messages\|voluntary\|involuntary\|block\|swaps\|average\)" | tail -30
+          grep -q "MODEL CHECK OK" out.txt

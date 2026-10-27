@@ -11,7 +11,9 @@ struct SettingsView: View {
     @EnvironmentObject var appManager: AppManager
     @Environment(\.dismiss) var dismiss
     @Environment(LLMEvaluator.self) var llm
+    @Environment(ModelDownloader.self) var downloader
     @Binding var currentThread: Thread?
+    @State var confirmDelete = false
 
     var body: some View {
         NavigationStack {
@@ -25,15 +27,33 @@ struct SettingsView: View {
                         Label("chats", systemImage: "message")
                     }
 
-                    NavigationLink(destination: ModelsSettingsView()) {
-                        Label {
-                            Text("models")
-                                .fixedSize()
-                        } icon: {
-                            Image(systemName: "arrow.down.circle")
-                        }
-                        .badge(appManager.modelDisplayName(appManager.currentModelName ?? ""))
+                }
+
+                Section {
+                    Label {
+                        Text(downloader.spec.displayName)
+                    } icon: {
+                        Image(systemName: "cpu")
                     }
+                    .badge(ModelDownloader.format(downloader.totalBytes))
+
+                    Button(role: .destructive) {
+                        confirmDelete = true
+                    } label: {
+                        Label("delete model", systemImage: "trash")
+                    }
+                    .disabled(llm.running)
+                    .confirmationDialog("delete \(downloader.spec.displayName)?", isPresented: $confirmDelete, titleVisibility: .visible) {
+                        Button("delete and download again", role: .destructive) {
+                            llm.loadState = .idle
+                            downloader.deleteModel()
+                            dismiss()
+                        }
+                    } message: {
+                        Text("frees \(ModelDownloader.format(downloader.totalBytes)). chats are kept.")
+                    }
+                } header: {
+                    Text("model")
                 }
 
                 Section {
@@ -110,4 +130,5 @@ extension Bundle {
     SettingsView(currentThread: .constant(nil))
         .environmentObject(AppManager())
         .environment(LLMEvaluator())
+        .environment(ModelDownloader.shared)
 }

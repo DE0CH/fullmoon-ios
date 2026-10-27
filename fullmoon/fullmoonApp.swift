@@ -6,15 +6,18 @@
 //
 
 import SwiftUI
-import MLXLLM
+import UserNotifications
 
 @main
 struct fullmoonApp: App {
     #if os(macOS)
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    #else
+    @UIApplicationDelegateAdaptor(PhoneAppDelegate.self) var appDelegate
     #endif
     @StateObject var appManager = AppManager()
     @State var llm = LLMEvaluator()
+    @State var downloader = ModelDownloader.shared
     
     var body: some Scene {
         WindowGroup {
@@ -22,7 +25,7 @@ struct fullmoonApp: App {
                 .modelContainer(for: [Thread.self, Message.self])
                 .environmentObject(appManager)
                 .environment(llm)
-                .environment(DeviceStat())
+                .environment(downloader)
                 #if os(macOS) || os(visionOS)
                 .frame(minWidth: 640, maxWidth: .infinity, minHeight: 420, maxHeight: .infinity)
                 #if os(macOS)
@@ -48,6 +51,30 @@ struct fullmoonApp: App {
         #endif
     }
 }
+
+#if os(iOS)
+/// iOS relaunches the app in the background when the model download has news; the downloader's session picks the
+/// events up and calls this handler once they are handled.
+class PhoneAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
+    func application(_ application: UIApplication,
+                     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        UNUserNotificationCenter.current().delegate = self
+        return true
+    }
+
+    func application(_ application: UIApplication, handleEventsForBackgroundURLSession identifier: String,
+                     completionHandler: @escaping () -> Void) {
+        MainActor.assumeIsolated {
+            ModelDownloader.shared.backgroundCompletionHandler = completionHandler
+        }
+    }
+
+    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async
+        -> UNNotificationPresentationOptions {
+        [.banner]
+    }
+}
+#endif
 
 #if os(macOS)
 class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {

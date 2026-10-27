@@ -1,12 +1,21 @@
-# fullmoon iOS
-![fullmoon iOS](https://fullmoon.app/images/app.png)
+# fullmoon iOS (Gemma 4 fork)
 
-[fullmoon](https://fullmoon.app) is an iOS app to chat with local large language models that’s optimized for Apple silicon and works on iPhone, iPad, and Mac. your chat history is saved locally, and you can customize the appearance of the app.
+A fork of [fullmoon](https://github.com/mainframecomputer/fullmoon-ios) that does one thing: private, offline chat with
+**Gemma 4 E4B** ([mlx-community/gemma-4-e4b-it-4bit](https://huggingface.co/mlx-community/gemma-4-e4b-it-4bit), 5.1 GB)
+on an iPhone, run on the phone's GPU through [MLX Swift LM](https://github.com/ml-explore/mlx-swift-lm).
 
-## supported models
-- [x] [Llama 3.2 1B](https://huggingface.co/mlx-community/Llama-3.2-1B-Instruct-4bit)
-- [x] [Llama 3.2 3B](https://huggingface.co/mlx-community/Llama-3.2-3B-Instruct-4bit)
-- [x] [DeepSeek-R1-Distill-Qwen-1.5B-4bit](https://huggingface.co/mlx-community/DeepSeek-R1-Distill-Qwen-1.5B-4bit)
+- **The model downloads after install** (it is over Apple's 4 GB app limit): a background `URLSession` fetches it in
+  32 MB ranges written straight into place, so the download can be paused, keeps going with the app closed or the
+  phone locked, survives the app being killed, and is checked against Hugging Face's SHA-256 at the end. A
+  notification says when it's ready.
+- **Chats stay on the phone** (SwiftData). Settings → delete model frees the space.
+- iOS doesn't let a background app use the GPU, so an answer in progress stops when the app leaves the screen.
+
+## build
+
+`project.yml` is an [XcodeGen](https://github.com/yonaskolb/XcodeGen) spec: `xcodegen generate`, then open
+`fullmoon.xcodeproj`. CI (`.github/workflows/ios.yml`) runs every flow on an iPhone 17 simulator and ships each push to
+`main` to TestFlight; `model-check.yml` runs the real model on a Mac runner.
 
 ## credits
-fullmoon is made possible by [MLX Swift](https://github.com/ml-explore/mlx-swift) from Apple. [MLX](https://github.com/ml-explore/mlx) is an array framework for machine learning research on Apple silicon.
+fullmoon is by [Mainframe](https://mainfra.me) (MIT). It is made possible by [MLX Swift](https://github.com/ml-explore/mlx-swift) from Apple.

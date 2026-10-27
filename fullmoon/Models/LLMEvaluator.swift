@@ -8,12 +8,10 @@
 import MLX
 import MLXLLM
 import MLXLMCommon
-import MLXRandom
+import os
 import SwiftUI
 
-enum LLMEvaluatorError: Error {
-    case modelNotFound(String)
-}
+private let log = Logger(subsystem: "dev.de0ch.fullmoon", category: "llm")
 
 @Observable
 @MainActor
@@ -23,10 +21,11 @@ class LLMEvaluator {
     var output = ""
     var modelInfo = ""
     var stat = ""
-    var progress = 0.0
     var thinkingTime: TimeInterval?
     var collapsed: Bool = false
     var isThinking: Bool = false
+    /// true while the weights are being read into memory (a few seconds after launch)
+    var loading = false
 
     var elapsedTime: TimeInterval? {
         if let startTime {
@@ -38,23 +37,9 @@ class LLMEvaluator {
 
     private var startTime: Date?
 
-    var modelConfiguration = ModelConfiguration.defaultModel
-
-    func switchModel(_ model: ModelConfiguration) async {
-        progress = 0.0 // reset progress
-        loadState = .idle
-        modelConfiguration = model
-        _ = try? await load(modelName: model.name)
-    }
-
-    /// parameters controlling the output
-    let generateParameters = GenerateParameters(temperature: 0.5)
+    /// parameters controlling the output (Gemma's recommended sampling)
+    let generateParameters = GenerateParameters(temperature: 1.0, topP: 0.95, topK: 64)
     let maxTokens = 4096
-
-    /// update the display every N tokens -- 4 looks like it updates continuously
-    /// and is low overhead.  observed ~15% reduction in tokens/s when updating
-    /// on every token
-    let displayEveryNTokens = 4
 
     enum LoadState {
         case idle
@@ -63,28 +48,21 @@ class LLMEvaluator {
 
     var loadState = LoadState.idle
 
-    /// load and return the model -- can be called multiple times, subsequent calls will
+    /// load and return the model from the downloaded files -- can be called multiple times, subsequent calls will
     /// just return the loaded model
-    func load(modelName: String) async throws -> ModelContainer {
-        guard let model = ModelConfiguration.getModelByName(modelName) else {
-            throw LLMEvaluatorError.modelNotFound(modelName)
-        }
-
+    func load() async throws -> ModelContainer {
         switch loadState {
         case .idle:
-            // limit the buffer cache
-            MLX.GPU.set(cacheLimit: 20 * 1024 * 1024)
+            loading = true
+            defer { loading = false }
+            // limit the buffer cache: the weights already take most of what iOS gives the app
+            Memory.cacheLimit = 20 * 1024 * 1024
 
-            let modelContainer = try await LLMModelFactory.shared.loadContainer(configuration: model) {
-                [modelConfiguration] progress in
-                Task { @MainActor in
-                    self.modelInfo =
-                        "Downloading \(modelConfiguration.name): \(Int(progress.fractionCompleted * 100))%"
-                    self.progress = progress.fractionCompleted
-                }
-            }
-            modelInfo =
-                "Loaded \(modelConfiguration.id).  Weights: \(MLX.GPU.activeMemory / 1024 / 1024)M"
+            let started = Date()
+            let modelContainer = try await LLMModelFactory.shared.loadContainer(
+                from: ModelDownloader.modelDirectory, using: TransformersTokenizerLoader())
+            modelInfo = "Loaded in \(String(format: "%.1f", Date().timeIntervalSince(started)))s.  Weights: \(Memory.activeMemory / 1024 / 1024)M"
+            log.notice("\(self.modelInfo)")
             loadState = .loaded(modelContainer)
             return modelContainer
 
@@ -98,7 +76,7 @@ class LLMEvaluator {
         cancelled = true
     }
 
-    func generate(modelName: String, thread: Thread, systemPrompt: String) async -> String {
+    func generate(thread: Thread, systemPrompt: String) async -> String {
         guard !running else { return "" }
 
         running = true
@@ -107,56 +85,63 @@ class LLMEvaluator {
         startTime = Date()
 
         do {
-            let modelContainer = try await load(modelName: modelName)
-
-            // augment the prompt as needed
-            let promptHistory = await modelContainer.configuration.getPromptHistory(thread: thread, systemPrompt: systemPrompt)
-
-            if await modelContainer.configuration.modelType == .reasoning {
-                isThinking = true
-            }
-
-            // each time you generate you will get something new
-            MLXRandom.seed(UInt64(Date.timeIntervalSinceReferenceDate * 1000))
-
-            let result = try await modelContainer.perform { context in
-                let input = try await context.processor.prepare(input: .init(messages: promptHistory))
-                return try MLXLMCommon.generate(
-                    input: input, parameters: generateParameters, context: context
-                ) { tokens in
-
-                    var cancelled = false
-                    Task { @MainActor in
-                        cancelled = self.cancelled
-                    }
-
-                    // update the output -- this will make the view show the text as it generates
-                    if tokens.count % displayEveryNTokens == 0 {
-                        let text = context.tokenizer.decode(tokens: tokens)
-                        Task { @MainActor in
-                            self.output = text
-                        }
-                    }
-
-                    if tokens.count >= maxTokens || cancelled {
-                        return .stop
-                    } else {
-                        return .more
-                    }
+            #if targetEnvironment(simulator)
+            // MLX needs a real GPU; the simulator (the CI phone replica) streams a stand-in answer instead
+            try await standIn(thread: thread)
+            #else
+            let modelContainer = try await load()
+            let input = try await modelContainer.prepare(input: UserInput(chat: chat(thread: thread, systemPrompt: systemPrompt)))
+            var tokenCount = 0
+            for await generation in try await modelContainer.generate(input: input, parameters: generateParameters) {
+                switch generation {
+                case .chunk(let text):
+                    output += text
+                    tokenCount += 1
+                case .info(let info):
+                    stat = " Tokens/second: \(String(format: "%.3f", info.tokensPerSecond))"
+                    log.notice("\(info.summary())")
+                default:
+                    break
+                }
+                // leaving the loop ends the stream, which stops generation
+                if cancelled || tokenCount >= maxTokens {
+                    break
                 }
             }
-
-            // update the text if needed, e.g. we haven't displayed because of displayEveryNTokens
-            if result.output != output {
-                output = result.output
-            }
-            stat = " Tokens/second: \(String(format: "%.3f", result.tokensPerSecond))"
-
+            #endif
         } catch {
             output = "Failed: \(error)"
+            log.error("generation failed: \(error)")
         }
 
         running = false
         return output
     }
+
+    private func chat(thread: Thread, systemPrompt: String) -> [Chat.Message] {
+        var messages: [Chat.Message] = []
+        if !systemPrompt.isEmpty {
+            messages.append(.system(systemPrompt))
+        }
+        for message in thread.sortedMessages {
+            switch message.role {
+            case .user: messages.append(.user(message.content))
+            case .assistant: messages.append(.assistant(message.content))
+            case .system: messages.append(.system(message.content))
+            }
+        }
+        return messages
+    }
+
+    #if targetEnvironment(simulator)
+    private func standIn(thread: Thread) async throws {
+        let question = thread.sortedMessages.last?.content ?? ""
+        let words = "This is the simulator stand-in for Gemma 4 E4B. You asked: \(question)".split(separator: " ")
+        for word in words {
+            if cancelled { break }
+            output += (output.isEmpty ? "" : " ") + word
+            try await Task.sleep(for: .milliseconds(40))
+        }
+    }
+    #endif
 }

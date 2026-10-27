@@ -14,7 +14,6 @@ struct ChatView: View {
     @Binding var currentThread: Thread?
     @Environment(LLMEvaluator.self) var llm
     @Namespace var bottomID
-    @State var showModelPicker = false
     @State var prompt = ""
     @FocusState.Binding var isPromptFocused: Bool
     @Binding var showChats: Bool
@@ -41,6 +40,7 @@ struct ChatView: View {
     var chatInput: some View {
         HStack(alignment: .bottom, spacing: 0) {
             TextField("message", text: $prompt, axis: .vertical)
+                .accessibilityIdentifier("message")
                 .focused($isPromptFocused)
                 .textFieldStyle(.plain)
             #if os(iOS) || os(visionOS)
@@ -84,37 +84,6 @@ struct ChatView: View {
         #endif
     }
 
-    var modelPickerButton: some View {
-        Button {
-            appManager.playHaptic()
-            showModelPicker.toggle()
-        } label: {
-            Group {
-                Image(systemName: "chevron.up")
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                #if os(iOS) || os(visionOS)
-                    .frame(width: 16)
-                #elseif os(macOS)
-                    .frame(width: 12)
-                #endif
-                    .tint(.primary)
-            }
-            #if os(iOS) || os(visionOS)
-            .frame(width: 48, height: 48)
-            #elseif os(macOS)
-            .frame(width: 32, height: 32)
-            #endif
-            .background(
-                Circle()
-                    .fill(platformBackgroundColor)
-            )
-        }
-        #if os(macOS) || os(visionOS)
-        .buttonStyle(.plain)
-        #endif
-    }
-
     var generateButton: some View {
         Button {
             generate()
@@ -129,6 +98,7 @@ struct ChatView: View {
             #endif
         }
         .disabled(isPromptEmpty)
+        .accessibilityIdentifier("send")
         #if os(iOS) || os(visionOS)
             .padding(.trailing, 12)
             .padding(.bottom, 12)
@@ -189,48 +159,20 @@ struct ChatView: View {
                         .aspectRatio(contentMode: .fit)
                         .frame(width: 32, height: 32)
                         .foregroundStyle(.quaternary)
+                    Text(llm.loading ? "waking up gemma…" : " ")
+                        .font(.footnote)
+                        .foregroundStyle(.tertiary)
+                        .padding(.top, 8)
                     Spacer()
                 }
 
-                HStack(alignment: .bottom) {
-                    modelPickerButton
-                    chatInput
-                }
-                .padding()
+                chatInput
+                    .padding()
             }
             .navigationTitle(chatTitle)
             #if os(iOS) || os(visionOS)
                 .navigationBarTitleDisplayMode(.inline)
             #endif
-                .sheet(isPresented: $showModelPicker) {
-                    NavigationStack {
-                        ModelsSettingsView()
-                            .environment(llm)
-                        #if os(visionOS)
-                            .toolbar {
-                                ToolbarItem(placement: .topBarLeading) {
-                                    Button(action: { showModelPicker.toggle() }) {
-                                        Image(systemName: "xmark")
-                                    }
-                                }
-                            }
-                        #endif
-                    }
-                    #if os(iOS)
-                    .presentationDragIndicator(.visible)
-                    .if(appManager.userInterfaceIdiom == .phone) { view in
-                        view.presentationDetents([.fraction(0.4)])
-                    }
-                    #elseif os(macOS)
-                    .toolbar {
-                        ToolbarItem(placement: .destructiveAction) {
-                            Button(action: { showModelPicker.toggle() }) {
-                                Text("close")
-                            }
-                        }
-                    }
-                    #endif
-                }
                 .toolbar {
                     #if os(iOS) || os(visionOS)
                     if appManager.userInterfaceIdiom == .phone {
@@ -283,11 +225,9 @@ struct ChatView: View {
                     appManager.playHaptic()
                     sendMessage(Message(role: .user, content: message, thread: currentThread))
                     isPromptFocused = true
-                    if let modelName = appManager.currentModelName {
-                        let output = await llm.generate(modelName: modelName, thread: currentThread, systemPrompt: appManager.systemPrompt)
-                        sendMessage(Message(role: .assistant, content: output, thread: currentThread, generatingTime: llm.thinkingTime))
-                        generatingThreadID = nil
-                    }
+                    let output = await llm.generate(thread: currentThread, systemPrompt: appManager.systemPrompt)
+                    sendMessage(Message(role: .assistant, content: output, thread: currentThread, generatingTime: llm.thinkingTime))
+                    generatingThreadID = nil
                 }
             }
         }

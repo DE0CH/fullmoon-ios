@@ -12,6 +12,8 @@ struct ContentView: View {
     @EnvironmentObject var appManager: AppManager
     @Environment(\.modelContext) var modelContext
     @Environment(LLMEvaluator.self) var llm
+    @Environment(ModelDownloader.self) var downloader
+    @Environment(\.scenePhase) var scenePhase
     @State var showOnboarding = false
     @State var showSettings = false
     @State var showChats = false
@@ -38,14 +40,25 @@ struct ContentView: View {
         .environmentObject(appManager)
         .environment(llm)
         .task {
-            if appManager.installedModels.count == 0 {
-                showOnboarding.toggle()
+            if !downloader.isReady {
+                showOnboarding = true
             } else {
                 isPromptFocused = true
-                // load the model
-                if let modelName = appManager.currentModelName {
-                    _ = try? await llm.load(modelName: modelName)
-                }
+                await loadModel()
+            }
+        }
+        .onChange(of: downloader.isReady) {
+            // the model was deleted in settings: download it again
+            if !downloader.isReady {
+                showSettings = false
+                showOnboarding = true
+            }
+        }
+        .onChange(of: scenePhase) {
+            // iOS doesn't let a background app use the GPU, so an answer in progress stops (and is kept) when the
+            // app leaves the screen
+            if scenePhase == .background && llm.running {
+                llm.stop()
             }
         }
         .if(appManager.userInterfaceIdiom == .phone) { view in
@@ -72,6 +85,7 @@ struct ContentView: View {
             SettingsView(currentThread: $currentThread)
                 .environmentObject(appManager)
                 .environment(llm)
+                .environment(downloader)
                 .presentationDragIndicator(.hidden)
                 .if(appManager.userInterfaceIdiom == .phone) { view in
                     view.presentationDetents([.medium])
@@ -80,8 +94,9 @@ struct ContentView: View {
         .sheet(isPresented: $showOnboarding, onDismiss: dismissOnboarding) {
             OnboardingView(showOnboarding: $showOnboarding)
                 .environment(llm)
-                .interactiveDismissDisabled(appManager.installedModels.count == 0)
-            
+                .environment(downloader)
+                .environmentObject(appManager)
+                .interactiveDismissDisabled(!downloader.isReady)
         }
         #if !os(visionOS)
         .tint(appManager.appTintColor.getColor())
@@ -89,13 +104,19 @@ struct ContentView: View {
         .fontDesign(appManager.appFontDesign.getFontDesign())
         .environment(\.dynamicTypeSize, appManager.appFontSize.getFontSize())
         .fontWidth(appManager.appFontWidth.getFontWidth())
-        .onAppear {
-            appManager.incrementNumberOfVisits()
-        }
     }
     
     func dismissOnboarding() {
         isPromptFocused = true
+        Task { await loadModel() }
+    }
+
+    func loadModel() async {
+        #if !targetEnvironment(simulator)
+        if downloader.isReady {
+            _ = try? await llm.load()
+        }
+        #endif
     }
 }
 
