@@ -49,7 +49,7 @@ struct OnboardingView: View {
                         VStack(alignment: .leading) {
                             Text("fast")
                                 .font(.headline)
-                            Text("Gemma 4 E4B, built by Google for phones, on Apple's MLX")
+                            Text("Gemma 4 E2B, built by Google for phones, on Apple's MLX")
                                 .font(.callout)
                                 .foregroundStyle(.secondary)
                         }

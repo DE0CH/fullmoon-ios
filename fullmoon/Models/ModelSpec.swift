@@ -13,7 +13,8 @@ struct ModelFile: Hashable, Sendable {
     let sha256: String?
 }
 
-/// The one model the app ships with: Gemma 4 E4B, 4-bit MLX. The app downloads it after install.
+/// The one model the app ships with: Gemma 4 E2B, 4-bit MLX. The app downloads it after install. (E4B's 4.2 GB of
+/// text weights didn't load on an 8 GB iPhone; E2B's are about 2.6 GB.)
 struct ModelSpec: Sendable {
     let displayName: String
     let repo: String
@@ -30,18 +31,18 @@ struct ModelSpec: Sendable {
     }
 
     static let gemma = ModelSpec(
-        displayName: "Gemma 4 E4B",
-        repo: "mlx-community/gemma-4-e4b-it-4bit",
-        revision: "475b9088d29754a3379866cf5aeb6b41acd313c2",
+        displayName: "Gemma 4 E2B",
+        repo: "mlx-community/gemma-4-e2b-it-4bit",
+        revision: "238767527555cb75a05732a84dff5d6ba0dd6809",
         files: [
-            ModelFile(name: "config.json", size: 6628, sha256: nil),
+            ModelFile(name: "config.json", size: 6395, sha256: nil),
             ModelFile(name: "generation_config.json", size: 208, sha256: nil),
             ModelFile(name: "chat_template.jinja", size: 17336, sha256: nil),
             ModelFile(name: "tokenizer_config.json", size: 2740, sha256: nil),
             ModelFile(name: "tokenizer.json", size: 32_169_626,
                       sha256: "cc8d3a0ce36466ccc1278bf987df5f71db1719b9ca6b4118264f45cb627bfe0f"),
-            ModelFile(name: "model.safetensors", size: 5_146_800_534,
-                      sha256: "932b8271fc3fe65adcc78b96c10c6268bbfb13e8f67d1358727c0d6ee97e1eff"),
+            ModelFile(name: "model.safetensors", size: 3_550_670_554,
+                      sha256: "038e39a37a7667373d2c3991375446b10c96ae1d717a68674870343db376b76e"),
         ],
         chunkSize: 32 << 20
     )
@@ -49,7 +50,7 @@ struct ModelSpec: Sendable {
     /// The UI tests download real files through the same chunked path, small enough for CI (MLX doesn't run in the
     /// simulator, so a stand-in answers there).
     static let uiTest = ModelSpec(
-        displayName: "Gemma 4 E4B",
+        displayName: "Gemma 4 E2B",
         repo: gemma.repo,
         revision: gemma.revision,
         files: gemma.files.filter { $0.name != "model.safetensors" },

@@ -1,4 +1,4 @@
-# Runs the app's model (Gemma 4 E4B, mlx-community 4-bit, at the revision pinned in ModelSpec.swift) on a macOS
+# Runs the app's model (Gemma 4 E2B, mlx-community 4-bit, at the revision pinned in ModelSpec.swift) on a macOS
 # runner with the app's own tokenizer bridge and MLX calls (the ModelCheck tool in project.yml): two chat turns that
 # must answer "Paris" and remember the name, plus speed and peak memory. The runner is a VM, so the speed is not the
 # phone's. The simulator UI test uses a stand-in for the model, so this is where CI hears Gemma.

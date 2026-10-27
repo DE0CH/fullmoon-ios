@@ -1,10 +1,10 @@
 # Lantern (a fullmoon fork)
 
 Lantern is a fork of [fullmoon](https://github.com/mainframecomputer/fullmoon-ios) that does one thing: private, offline chat with
-**Gemma 4 E4B** ([mlx-community/gemma-4-e4b-it-4bit](https://huggingface.co/mlx-community/gemma-4-e4b-it-4bit), 5.1 GB)
+**Gemma 4 E2B** ([mlx-community/gemma-4-e2b-it-4bit](https://huggingface.co/mlx-community/gemma-4-e2b-it-4bit), 3.6 GB)
 on an iPhone, run on the phone's GPU through [MLX Swift LM](https://github.com/ml-explore/mlx-swift-lm).
 
-- **The model downloads after install** (it is over Apple's 4 GB app limit): a background `URLSession` fetches it in
+- **The model downloads after install** (it would make the app too big to ship): a background `URLSession` fetches it in
   32 MB ranges written straight into place, so the download can be paused, keeps going with the app closed or the
   phone locked, survives the app being killed, and is checked against Hugging Face's SHA-256 at the end. A
   notification says when it's ready.

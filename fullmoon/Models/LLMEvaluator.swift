@@ -136,7 +136,7 @@ class LLMEvaluator {
     #if targetEnvironment(simulator)
     private func standIn(thread: Thread) async throws {
         let question = thread.sortedMessages.last?.content ?? ""
-        let words = "This is the simulator stand-in for Gemma 4 E4B. You asked: \(question)".split(separator: " ")
+        let words = "This is the simulator stand-in for Gemma 4 E2B. You asked: \(question)".split(separator: " ")
         for word in words {
             if cancelled { break }
             output += (output.isEmpty ? "" : " ") + word

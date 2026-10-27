@@ -101,6 +101,12 @@ final class ModelDownloader: NSObject {
         config.httpMaximumConnectionsPerHost = ModelSpec.isUITest ? 1 : 4
         config.timeoutIntervalForResource = 7 * 24 * 3600
         session = URLSession(configuration: config, delegate: self, delegateQueue: nil)
+        Self.removeOtherModels()
+        // ranges still queued for a model the app no longer uses would be written into this model's files
+        let prefix = ModelSpec.current.url(for: ModelSpec.current.files[0]).deletingLastPathComponent().absoluteString
+        session.getAllTasks { tasks in
+            tasks.filter { !($0.originalRequest?.url?.absoluteString.hasPrefix(prefix) ?? false) }.forEach { $0.cancel() }
+        }
 
         if FileManager.default.fileExists(atPath: Self.readyFile.path) {
             phase = .ready
@@ -115,6 +121,16 @@ final class ModelDownloader: NSObject {
             } else {
                 start()
             }
+        }
+    }
+
+    /// frees the space of a model an earlier version of the app used (each model has its own directory)
+    nonisolated private static func removeOtherModels() {
+        let parent = modelDirectory.deletingLastPathComponent()
+        let others = (try? FileManager.default.contentsOfDirectory(at: parent, includingPropertiesForKeys: nil)) ?? []
+        for dir in others where dir.lastPathComponent != modelDirectory.lastPathComponent {
+            try? FileManager.default.removeItem(at: dir)
+            log.notice("removed old model \(dir.lastPathComponent)")
         }
     }
 

@@ -1,4 +1,4 @@
-# XcodeGen spec (CI runs `xcodegen generate`; the .xcodeproj is not committed). The app downloads Gemma 4 E4B (MLX,
+# XcodeGen spec (CI runs `xcodegen generate`; the .xcodeproj is not committed). The app downloads Gemma 4 E2B (MLX,
 # 4-bit) from Hugging Face after install and runs it on the phone's GPU; it has no server and no secrets.
 name: fullmoon
 options:
