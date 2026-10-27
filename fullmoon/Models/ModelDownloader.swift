@@ -196,20 +196,24 @@ final class ModelDownloader: NSObject {
                     self.finish()
                     return
                 }
-                for chunk in missing {
-                    self.enqueue(chunk)
+                for (index, chunk) in missing.enumerated() {
+                    // the UI tests' small files would arrive before the test can press pause: space them out
+                    self.enqueue(chunk, after: ModelSpec.isUITest ? Double(index) * 0.25 : 0)
                 }
             }
         }
     }
 
-    private func enqueue(_ chunk: Chunk) {
+    private func enqueue(_ chunk: Chunk, after delay: TimeInterval = 0) {
         guard let file = spec.files.first(where: { $0.name == chunk.file }) else { return }
         var request = URLRequest(url: spec.url(for: file))
         request.setValue("bytes=\(chunk.offset)-\(chunk.offset + chunk.length - 1)", forHTTPHeaderField: "Range")
         let task = session.downloadTask(with: request)
         task.taskDescription = chunk.key
         task.countOfBytesClientExpectsToReceive = chunk.length
+        if delay > 0 {
+            task.earliestBeginDate = Date().addingTimeInterval(delay)
+        }
         task.resume()
     }
 
