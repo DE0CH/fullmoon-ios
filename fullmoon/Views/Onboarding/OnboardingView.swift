@@ -27,13 +27,13 @@ struct OnboardingView: View {
                 Spacer()
                 
                 VStack(spacing: 12) {
-                    Image(.moon)
+                    Image(.logo)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
-                        .frame(width: 64, height: 64)
+                        .frame(width: 80, height: 80)
                     
                     VStack(spacing: 4) {
-                        Text("fullmoon")
+                        Text("lantern")
                             .font(.title)
                             .fontWeight(.semibold)
                         Text("private chat with Gemma, running entirely on your iPhone")

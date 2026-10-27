@@ -52,7 +52,7 @@ targets:
     info:
       path: fullmoon/Info.plist
       properties:
-        CFBundleDisplayName: fullmoon
+        CFBundleDisplayName: Lantern
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         ITSAppUsesNonExemptEncryption: false

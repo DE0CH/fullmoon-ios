@@ -314,7 +314,7 @@ final class ModelDownloader: NSObject {
     private func notifyIfInBackground() {
         guard UIApplication.shared.applicationState != .active else { return }
         let content = UNMutableNotificationContent()
-        content.title = "fullmoon is ready"
+        content.title = "Lantern is ready"
         content.body = "\(spec.displayName) finished downloading. Tap to start chatting."
         UNUserNotificationCenter.current().add(
             UNNotificationRequest(identifier: "model-ready", content: content, trigger: nil))

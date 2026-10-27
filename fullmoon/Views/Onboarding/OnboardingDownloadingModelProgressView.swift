@@ -11,6 +11,7 @@ struct OnboardingDownloadingModelProgressView: View {
     @Binding var showOnboarding: Bool
     @EnvironmentObject var appManager: AppManager
     @Environment(ModelDownloader.self) var downloader
+    @State private var glow = false
 
     var title: String {
         switch downloader.phase {
@@ -54,7 +55,24 @@ struct OnboardingDownloadingModelProgressView: View {
             Spacer()
 
             VStack(spacing: 16) {
-                MoonAnimationView(isDone: downloader.isReady)
+                Image(.logo)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 80, height: 80)
+                    // the lantern breathes while the download runs
+                    .opacity(downloader.phase == .downloading && glow ? 0.55 : 1)
+                    .animation(downloader.phase == .downloading ? .easeInOut(duration: 1.2).repeatForever() : .default, value: glow)
+                    .overlay(alignment: .bottomTrailing) {
+                        if downloader.isReady {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.title2)
+                                .symbolRenderingMode(.palette)
+                                .foregroundStyle(.white, .green)
+                                .offset(x: 8, y: 8)
+                                .transition(.scale)
+                        }
+                    }
+                    .onAppear { glow = true }
 
                 VStack(spacing: 4) {
                     Text(title)
