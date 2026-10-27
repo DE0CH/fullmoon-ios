@@ -298,8 +298,17 @@ final class ModelDownloader: NSObject {
                 continue
             }
             var hasher = SHA256()
-            while let block = try? handle.read(upToCount: 16 << 20), !block.isEmpty {
-                hasher.update(data: block)
+            var more = true
+            while more {
+                // each block is freed as soon as it is hashed; without the pool the 5 GB file piles up in memory
+                // and iOS kills the app
+                autoreleasepool {
+                    if let block = try? handle.read(upToCount: 8 << 20), !block.isEmpty {
+                        hasher.update(data: block)
+                    } else {
+                        more = false
+                    }
+                }
             }
             try? handle.close()
             let digest = hasher.finalize().map { String(format: "%02x", $0) }.joined()
