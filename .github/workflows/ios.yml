@@ -8,10 +8,9 @@ on:
   workflow_dispatch:
     inputs:
       upload: { description: "Upload to TestFlight", type: boolean, default: true }
-  push:
-    branches: [main]
+  push:  # every branch (the gate merges a branch when this is green); main alone uploads
     paths: ["fullmoon/**", "UITests/**", "project.yml", ".github/workflows/ios.yml"]
-concurrency: { group: ios, cancel-in-progress: false }
+concurrency: { group: "ios-${{ github.ref }}", cancel-in-progress: false }
 permissions: { contents: read }
 defaults:
   run:
@@ -76,14 +75,14 @@ jobs:
             ${{ runner.temp }}/test.log
           if-no-files-found: ignore
       - name: Archive (unsigned)
-        if: github.event_name != 'workflow_dispatch' || inputs.upload
+        if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || inputs.upload
         run: |
           xcodebuild archive -project fullmoon.xcodeproj -scheme fullmoon -configuration Release -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/app.xcarchive" -skipPackagePluginValidation -skipMacroValidation CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" > "$RUNNER_TEMP/archive.log" 2>&1 || true
           grep -E "error:|\*\* ARCHIVE" "$RUNNER_TEMP/archive.log" | head -40 || true
           grep -q "ARCHIVE SUCCEEDED" "$RUNNER_TEMP/archive.log"
       - name: Export, cloud-sign and upload to TestFlight
-        if: github.event_name != 'workflow_dispatch' || inputs.upload
+        if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || inputs.upload
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}

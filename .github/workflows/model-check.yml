@@ -5,8 +5,7 @@
 name: model-check
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
+  push:  # every branch: the gate waits for it
     paths: ["fullmoon/Models/**", "model-check/**", "project.yml", ".github/workflows/model-check.yml"]
 permissions: { contents: read }
 defaults:
